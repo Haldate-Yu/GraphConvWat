@@ -46,7 +46,7 @@ class TaylorDiagram(object):
         import mpl_toolkits.axisartist.floating_axes as FA
         import mpl_toolkits.axisartist.grid_finder as GF
 
-        self.refstd = refstd            # Reference standard deviation
+        self.refstd = refstd  # Reference standard deviation
 
         tr = PolarAxes.PolarTransform()
 
@@ -55,13 +55,13 @@ class TaylorDiagram(object):
         if extend:
             # Diagram extended to negative correlations
             assert (extend <= 2) and (extend > 1)
-            self.tmax = extend * NP.pi/2
+            self.tmax = extend * NP.pi / 2
             rlocs = NP.concatenate((-rlocs[:0:-1], rlocs))
         else:
             # Diagram limited to positive correlations
-            self.tmax = NP.pi/2
-        tlocs = NP.arccos(rlocs)        # Conversion to polar angles
-        gl1 = GF.FixedLocator(tlocs)    # Positions
+            self.tmax = NP.pi / 2
+        tlocs = NP.arccos(rlocs)  # Conversion to polar angles
+        gl1 = GF.FixedLocator(tlocs)  # Positions
         tf1 = GF.DictFormatter(dict(zip(tlocs, map(str, rlocs))))
 
         # Standard deviation axis extent (in units of reference stddev)
@@ -80,7 +80,7 @@ class TaylorDiagram(object):
         fig.add_subplot(ax)
 
         # Adjust axes
-        ax.axis["top"].set_axis_direction("bottom")   # "Angle axis"
+        ax.axis["top"].set_axis_direction("bottom")  # "Angle axis"
         ax.axis["top"].toggle(ticklabels=True, label=True)
         ax.axis["top"].major_ticklabels.set_axis_direction("top")
         ax.axis["top"].label.set_axis_direction("top")
@@ -89,18 +89,18 @@ class TaylorDiagram(object):
         ax.axis["left"].set_axis_direction("bottom")  # "X axis"
         ax.axis["left"].label.set_text("Standard deviation")
 
-        ax.axis["right"].set_axis_direction("top")    # "Y-axis"
+        ax.axis["right"].set_axis_direction("top")  # "Y-axis"
         ax.axis["right"].toggle(ticklabels=True)
         ax.axis["right"].major_ticklabels.set_axis_direction(
-            "bottom" if (extend and extend>1.5) else "left")
+            "bottom" if (extend and extend > 1.5) else "left")
 
         if self.smin:
             ax.axis["bottom"].toggle(ticklabels=False, label=False)
         else:
-            ax.axis["bottom"].set_visible(False)          # Unused
+            ax.axis["bottom"].set_visible(False)  # Unused
 
-        self._ax = ax                   # Graphical axes
-        self.ax = ax.get_aux_axes(tr)   # Polar coordinates
+        self._ax = ax  # Graphical axes
+        self.ax = ax.get_aux_axes(tr)  # Polar coordinates
 
         # Add reference point and stddev contour
         l, = self.ax.plot([0], self.refstd, 'k*',
@@ -138,7 +138,7 @@ class TaylorDiagram(object):
         rs, ts = NP.meshgrid(NP.linspace(self.smin, self.smax),
                              NP.linspace(0, self.tmax))
         # Compute centered RMS difference
-        rms = NP.sqrt(self.refstd**2 + rs**2 - 2*self.refstd*rs*NP.cos(ts))
+        rms = NP.sqrt(self.refstd ** 2 + rs ** 2 - 2 * self.refstd * rs * NP.cos(ts))
 
         contours = self.ax.contour(ts, rs, rms, levels, **kwargs)
 
@@ -149,18 +149,18 @@ def test1():
     """Display a Taylor diagram in a separate axis."""
 
     # Reference dataset
-    x = NP.linspace(0, 4*NP.pi, 100)
+    x = NP.linspace(0, 4 * NP.pi, 100)
     data = NP.sin(x)
-    refstd = data.std(ddof=1)           # Reference standard deviation
+    refstd = data.std(ddof=1)  # Reference standard deviation
 
     # Generate models
-    m1 = data + 0.2*NP.random.randn(len(x))     # Model 1
-    m2 = 0.8*data + .1*NP.random.randn(len(x))  # Model 2
-    m3 = NP.sin(x-NP.pi/10)                     # Model 3
+    m1 = data + 0.2 * NP.random.randn(len(x))  # Model 1
+    m2 = 0.8 * data + .1 * NP.random.randn(len(x))  # Model 2
+    m3 = NP.sin(x - NP.pi / 10)  # Model 3
 
     # Compute stddev and correlation coefficient of models
-    samples = NP.array([ [m.std(ddof=1), NP.corrcoef(data, m)[0, 1]]
-                         for m in (m1, m2, m3)])
+    samples = NP.array([[m.std(ddof=1), NP.corrcoef(data, m)[0, 1]]
+                        for m in (m1, m2, m3)])
 
     fig = PLT.figure(figsize=(10, 4))
 
@@ -173,15 +173,15 @@ def test1():
 
     ax1.plot(x, data, 'ko', label='Data')
     for i, m in enumerate([m1, m2, m3]):
-        ax1.plot(x, m, c=colors[i], label='Model %d' % (i+1))
+        ax1.plot(x, m, c=colors[i], label='Model %d' % (i + 1))
     ax1.legend(numpoints=1, prop=dict(size='small'), loc='best')
 
     # Add the models to Taylor diagram
     for i, (stddev, corrcoef) in enumerate(samples):
         dia.add_sample(stddev, corrcoef,
-                       marker='$%d$' % (i+1), ms=10, ls='',
+                       marker='$%d$' % (i + 1), ms=10, ls='',
                        mfc=colors[i], mec=colors[i],
-                       label="Model %d" % (i+1))
+                       label="Model %d" % (i + 1))
 
     # Add grid
     dia.add_grid()
@@ -192,7 +192,7 @@ def test1():
 
     # Add a figure legend
     fig.legend(dia.samplePoints,
-               [ p.get_label() for p in dia.samplePoints ],
+               [p.get_label() for p in dia.samplePoints],
                numpoints=1, prop=dict(size='small'), loc='upper right')
 
     return dia
@@ -225,7 +225,7 @@ def test2():
     # Add models to Taylor diagram
     for i, (stddev, corrcoef, name) in enumerate(samples):
         dia.add_sample(stddev, corrcoef,
-                       marker='$%d$' % (i+1), ms=10, ls='',
+                       marker='$%d$' % (i + 1), ms=10, ls='',
                        mfc='k', mec='k',
                        label=name)
 
@@ -233,12 +233,12 @@ def test2():
     contours = dia.add_contours(levels=5, colors='0.5')  # 5 levels in grey
     PLT.clabel(contours, inline=1, fontsize=10, fmt='%.0f')
 
-    dia.add_grid()                                  # Add grid
+    dia.add_grid()  # Add grid
     dia._ax.axis[:].major_ticks.set_tick_out(True)  # Put ticks outward
 
     # Add a figure legend and title
     fig.legend(dia.samplePoints,
-               [ p.get_label() for p in dia.samplePoints ],
+               [p.get_label() for p in dia.samplePoints],
                numpoints=1, prop=dict(size='small'), loc='upper right')
     fig.suptitle("Taylor diagram", size='x-large')  # Figure title
 
@@ -246,7 +246,6 @@ def test2():
 
 
 if __name__ == '__main__':
-
     dia = test1()
     dia = test2()
 

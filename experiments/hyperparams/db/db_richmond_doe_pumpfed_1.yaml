@@ -1,5 +1,5 @@
 wds : richmond
-nScenes : 20000
+nScenes : 100
 genAlgo : doe
 
 chunks:

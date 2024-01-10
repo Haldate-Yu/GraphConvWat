@@ -5,19 +5,20 @@
 # .
 import torch
 
+
 class EarlyStopping(object):
     def __init__(self, mode='min', min_delta=0, patience=10, percentage=False):
-        self.mode           = mode
-        self.min_delta      = min_delta
-        self.patience       = patience
-        self.best           = None
+        self.mode = mode
+        self.min_delta = min_delta
+        self.patience = patience
+        self.best = None
         self.num_bad_epochs = 0
-        self.is_better      = None
+        self.is_better = None
         self._init_is_better(mode, min_delta, percentage)
 
         if patience == 0:
-            self.is_better  = lambda a, b: True
-            self.step       = lambda a: False
+            self.is_better = lambda a, b: True
+            self.step = lambda a: False
 
     def step(self, metrics):
         if self.best is None:
@@ -49,7 +50,7 @@ class EarlyStopping(object):
         else:
             if mode == 'min':
                 self.is_better = lambda a, best: a < best - (
-                            best * min_delta / 100)
+                        best * min_delta / 100)
             if mode == 'max':
                 self.is_better = lambda a, best: a > best + (
-                            best * min_delta / 100)
+                        best * min_delta / 100)

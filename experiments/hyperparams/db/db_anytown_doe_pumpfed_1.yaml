@@ -1,5 +1,5 @@
 wds : anytown
-nScenes : 1000
+nScenes : 100
 genAlgo : doe
 
 chunks:
