@@ -28,7 +28,6 @@ class m_GCN(torch.nn.Module):
             self.gcn_aggrs.append(gcn)
 
     def forward(self, data):
-        # data = data.to(device)
         x, y, edge_index, edge_attr = data.x, data.y, data.edge_index, data.edge_attr
 
         """ Embedding for edge features. """

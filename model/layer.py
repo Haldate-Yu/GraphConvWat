@@ -3,15 +3,13 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 from torch.nn import (Dropout, Sequential, SELU)
+from torch_geometric.utils import spmm
 from torch_scatter import scatter
+from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing
+from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_geometric.nn.dense.linear import Linear
 from torch_geometric.typing import Adj, OptPairTensor, OptTensor, Size
-
-""" 
-    Using partial code from torch_geometric.nn.conv.GENconv
-    https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/nn/conv/gen_conv.html#GENConv
-"""
 
 
 class MLP(Sequential):
@@ -140,3 +138,118 @@ class GENConvolution(MessagePassing):
     def __repr__(self) -> str:
         return (f'{self.__class__.__name__}({self.in_dim}, '
                 f'{self.out_dim}, aggr={self.aggr})')
+
+
+class SAGEConv(MessagePassing):
+    def __init__(self, in_channels: Union[int, Tuple[int, int]],
+                 out_channels: int, normalize: bool = False,
+                 root_weight: bool = True, bias: bool = True, **kwargs):
+        kwargs.setdefault('aggr', 'mean')
+        super().__init__(**kwargs)
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.normalize = normalize
+        self.root_weight = root_weight
+
+        if isinstance(in_channels, int):
+            in_channels = (in_channels, in_channels)
+
+        self.lin_l = Linear(in_channels[0], out_channels, bias=bias)
+        if self.root_weight:
+            self.lin_r = Linear(in_channels[1], out_channels, bias=False)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.lin_l.reset_parameters()
+        if self.root_weight:
+            self.lin_r.reset_parameters()
+
+    def forward(self, x: Union[Tensor, OptPairTensor], edge_index: Adj,
+                size: Size = None) -> Tensor:
+        if isinstance(x, Tensor):
+            x: OptPairTensor = (x, x)
+
+            # propagate_type: (x: OptPairTensor)
+        out = self.propagate(edge_index, x=x, size=size)
+        out = self.lin_l(out)
+
+        x_r = x[1]
+        if self.root_weight and x_r is not None:
+            out += self.lin_r(x_r)
+
+        if self.normalize:
+            out = F.normalize(out, p=2., dim=-1)
+
+        return out
+
+    def message(self, x_j: Tensor) -> Tensor:
+        return x_j
+
+    def message_and_aggregate(self, adj_t: SparseTensor,
+                              x: OptPairTensor) -> Tensor:
+        adj_t = adj_t.set_value(None, layout=None)
+        return matmul(adj_t, x[0], reduce=self.aggr)
+
+
+class SSGConv(MessagePassing):
+    def __init__(self, in_channels: int, out_channels: int, alpha: float,
+                 K: int = 1, cached: bool = False, add_self_loops: bool = True,
+                 bias: bool = True, **kwargs):
+        kwargs.setdefault('aggr', 'add')
+        super().__init__(**kwargs)
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.alpha = alpha
+        self.K = K
+        self.cached = cached
+        self.add_self_loops = add_self_loops
+
+        self._cached_h = None
+
+        self.lin = Linear(in_channels, out_channels, bias=bias)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        super().reset_parameters()
+        self.lin.reset_parameters()
+        self._cached_h = None
+
+    def forward(self, x: Tensor, edge_index: Adj,
+                edge_weight: OptTensor = None) -> Tensor:
+
+        cache = self._cached_h
+        if cache is None:
+            if isinstance(edge_index, Tensor):
+                edge_index, edge_weight = gcn_norm(  # yapf: disable
+                    edge_index, edge_weight, x.size(self.node_dim), False,
+                    self.add_self_loops, self.flow, dtype=x.dtype)
+            elif isinstance(edge_index, SparseTensor):
+                edge_index = gcn_norm(  # yapf: disable
+                    edge_index, edge_weight, x.size(self.node_dim), False,
+                    self.add_self_loops, self.flow, dtype=x.dtype)
+
+            h = x * self.alpha
+            for k in range(self.K):
+                # propagate_type: (x: Tensor, edge_weight: OptTensor)
+                x = self.propagate(edge_index, x=x, edge_weight=edge_weight)
+                h = h + (1 - self.alpha) / self.K * x
+            if self.cached:
+                self._cached_h = h
+        else:
+            h = cache.detach()
+
+        return self.lin(h)
+
+    def message(self, x_j: Tensor, edge_weight: Tensor) -> Tensor:
+        return edge_weight.view(-1, 1) * x_j
+
+    def message_and_aggregate(self, adj_t: SparseTensor, x: Tensor) -> Tensor:
+        return spmm(adj_t, x, reduce=self.aggr)
+
+    def __repr__(self) -> str:
+        return (f'{self.__class__.__name__}({self.in_channels}, '
+                f'{self.out_channels}, K={self.K}, alpha={self.alpha})')
