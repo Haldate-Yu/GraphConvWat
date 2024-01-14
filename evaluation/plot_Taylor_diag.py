@@ -158,7 +158,7 @@ if not args.nocenter:
                        mfc='none',
                        mec=cmap(i),
                        mew=3,
-                       label='GraphConvWat@OR=' + str(obs_rat)
+                       label='GraphConv@OR=' + str(obs_rat)
                        )
 
     for i, obs_rat in enumerate(obs_ratios):
