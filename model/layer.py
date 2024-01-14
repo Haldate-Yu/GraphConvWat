@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 import torch
 import torch.nn.functional as F
 from torch import Tensor
