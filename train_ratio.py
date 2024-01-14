@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from epynet import Network
 
 from model.load_model import load_model
-from utils.graph_utils import get_nx_graph, get_sensitivity_matrix
+from utils.graph_utils import get_nx_graph, get_sensitivity_matrix, seed_everything
 from utils.DataReader import DataReader
 from utils.SensorInstaller import SensorInstaller
 from utils.Metrics import Metrics
@@ -43,7 +43,7 @@ parser.add_argument('--obsrat',
                     )
 parser.add_argument('--adj',
                     default='binary',
-                    choices=['binary', 'weighted', 'logarithmic', 'pruned'],
+                    choices=['binary', 'weighted', 'logarithmic', 'pruned', 'm-GCN'],
                     type=str,
                     help="Type of adjacency matrix.")
 parser.add_argument('--deploy',
@@ -75,6 +75,14 @@ parser.add_argument('--hidden_dim',
                     default='64',
                     type=int,
                     help="Num of hidden dims.")
+parser.add_argument('--dropout',
+                    default=0.1,
+                    type=float,
+                    help="Dropout rate.")
+parser.add_argument('--use_weight',
+                    default=False,
+                    type=bool,
+                    help="Use Dataset Edge Weight")
 parser.add_argument('--batch',
                     default='40',
                     type=int,
@@ -108,15 +116,22 @@ pathToExps = os.path.join(pathToRoot, 'experiments')
 pathToLogs = os.path.join(pathToExps, 'logs')
 run_id = 1
 logs = [f for f in glob.glob(os.path.join(pathToLogs, '*.csv'))]
-run_stamp = wds_name + '-' + args.deploy + '-' + str(args.obsrat) + '-' + args.adj + '-' + args.tag + '-'
-while os.path.join(pathToLogs, run_stamp + str(run_id) + '.csv') in logs:
-    run_id += 1
+run_stamp = wds_name + '-' + args.deploy + '-' + args.model + '-' + str(args.obsrat) + '-' + args.adj + '-' + args.tag + '-'
+# while os.path.join(pathToLogs, run_stamp + str(run_id) + '.csv') in logs:
+#     run_id += 1
 run_stamp = run_stamp + str(run_id)
 pathToLog = os.path.join(pathToLogs, run_stamp + '.csv')
 pathToModel = os.path.join(pathToExps, 'models', run_stamp + '.pt')
 pathToMeta = os.path.join(pathToExps, 'models', run_stamp + '_meta.csv')
 pathToSens = os.path.join(pathToExps, 'models', run_stamp + '_sensor_nodes.csv')
 pathToWDS = os.path.join('water_networks', wds_name + '.inp')
+
+if args.deterministic:
+    seeds = [1, 8, 5266, 739, 88867]
+    seed = seeds[run_id % len(seeds)]
+else:
+    seed = 42 + run_id
+seed_everything(seed)
 
 # ----- ----- ----- ----- ----- -----
 # Saving hyperparams
@@ -144,7 +159,10 @@ def train_one_epoch():
         batch = batch.to(device)
         optimizer.zero_grad()
         out = model(batch)
-        loss = F.mse_loss(out, batch.y)
+        if args.model == 'm-gcn':
+            loss = model.cal_loss(batch.y, out)
+        else:
+            loss = F.mse_loss(out, batch.y)
         loss.backward()
         optimizer.step()
         total_loss += loss.item() * batch.num_graphs
@@ -162,7 +180,10 @@ def eval_metrics(dataloader):
         batch = batch.to(device)
         out = model(batch)
         # graph conv loss
-        loss = F.mse_loss(out, batch.y)
+        if args.model == 'm-gcn':
+            loss = model.cal_loss(batch.y, out)
+        else:
+            loss = F.mse_loss(out, batch.y)
         rel_err = metrics.rel_err(out, batch.y)
         rel_err_obs = metrics.rel_err(
             out,
@@ -190,16 +211,10 @@ def eval_metrics(dataloader):
 # ----- ----- ----- ----- ----- -----
 wds = Network(pathToWDS)
 G = get_nx_graph(wds, mode=args.adj)
-print(f'{G}: {G.number_of_nodes()}\n')
 
 # ----- ----- ----- ----- ----- -----
 # Setting Sensors
 # ----- ----- ----- ----- ----- -----
-if args.deterministic:
-    seeds = [1, 8, 5266, 739, 88867]
-    seed = seeds[run_id % len(seeds)]
-else:
-    seed = 42 + run_id
 
 sensor_budget = int(len(wds.junctions) * args.obsrat)
 print('Deploying {} sensors...\n'.format(sensor_budget))
@@ -336,7 +351,7 @@ for epoch in range(0, args.epoch):
         'vld_rel_err_o': vld_rel_err_obs,
         'vld_rel_err_h': vld_rel_err_hid
     })
-    results = results.append(new_results, ignore_index=True)
+    results = results._append(new_results, ignore_index=True)
     if epoch % 50 == 0:
         print(header)
     values = ''.join(['{:^15.6f}'.format(value) for value in new_results.values])

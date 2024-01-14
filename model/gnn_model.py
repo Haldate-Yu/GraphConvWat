@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import ChebConv
-from layer import GENConvolution
+from .layer import GENConvolution, SAGEConv, SSGConv
 
 """
     Graph convolution based model using multiple GCN layers (with multiple hops).
@@ -53,7 +53,7 @@ class m_GCN(torch.nn.Module):
 
         del data
 
-        return y, y_predict
+        return y_predict
 
     def cal_loss(self, y, y_predict):
         """ L1 Loss. """
@@ -61,3 +61,73 @@ class m_GCN(torch.nn.Module):
         loss = l1_loss(y, y_predict)
         del y, y_predict
         return loss
+
+
+class GraphSage(torch.nn.Module):
+    def __init__(self, in_dim, hid_dim, out_dim, num_layers, dropout=0., use_weight=False):
+        super().__init__()
+        self.in_dim = in_dim
+        self.hid_dim = hid_dim
+        self.out_dim = out_dim
+        self.num_layers = num_layers
+        self.dropout = dropout
+        self.use_weight = use_weight
+
+        self.conv1 = SAGEConv(self.in_dim, self.hid_dim)
+        self.convs = torch.nn.ModuleList()
+        for i in range(self.num_layers):
+            self.convs.append(SAGEConv(self.hid_dim, self.hid_dim))
+        self.lin1 = torch.nn.Linear(self.hid_dim, self.hid_dim)
+        self.lin2 = torch.nn.Linear(self.hid_dim, self.out_dim)
+
+    def reset_parameters(self):
+        pass
+
+    def forward(self, data):
+        x, edge_index, edge_weight = data.x, data.edge_index, data.weight
+        if self.use_weight:
+            x = F.relu(self.conv1(x, edge_index, edge_weight))
+        else:
+            x = F.relu(self.conv1(x, edge_index))
+        for conv in self.convs:
+            if self.use_weight:
+                x = F.relu(conv(x, edge_index, edge_weight))
+            else:
+                x = F.relu(conv(x, edge_index))
+
+        x = F.relu(self.lin1(x))
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.lin2(x)
+
+        return x
+
+
+class SSGC(torch.nn.Module):
+    def __init__(self, in_dim, hid_dim, out_dim, num_layers, alpha=0.6, dropout=0., use_weight=False):
+        super().__init__()
+        self.in_dim = in_dim
+        self.hid_dim = hid_dim
+        self.out_dim = out_dim
+        self.num_layers = num_layers
+        self.alpha = alpha
+        self.dropout = dropout
+        self.use_weight = use_weight
+
+        self.conv1 = SSGConv(self.in_dim, self.hid_dim, K=self.num_layers, alpha=self.alpha)
+        self.lin1 = torch.nn.Linear(self.hid_dim, self.hid_dim)
+        self.lin2 = torch.nn.Linear(self.hid_dim, self.out_dim)
+
+    def reset_parameters(self):
+        pass
+
+    def forward(self, data):
+        x, edge_index, edge_weight = data.x, data.edge_index, data.weight
+        if self.use_weight:
+            x = F.relu(self.conv1(x, edge_index, edge_weight))
+        else:
+            x = F.relu(self.conv1(x, edge_index))
+        x = F.relu(self.lin1(x))
+        x = F.dropout(x, p=self.dropout_ratio, training=self.training)
+        x = self.lin2(x)
+
+        return x

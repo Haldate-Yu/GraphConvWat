@@ -13,6 +13,5 @@ def build_dataloader(G, set_x, set_y, batch_size, shuffle):
         graph.x = torch.Tensor(x)
         graph.y = torch.Tensor(y)
         data.append(graph)
-    print(f'total graphs: {len(data)}')
     loader = DataLoader(data, batch_size=batch_size, shuffle=shuffle)
     return loader

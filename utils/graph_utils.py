@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+import torch
+import random
 import networkx as nx
 
 
@@ -70,6 +72,16 @@ def get_nx_graph(wds, mode='binary'):
         for valve in wds.valves:
             if (valve.from_node.index in junc_list) and (valve.to_node.index in junc_list):
                 G.add_edge(valve.from_node.index, valve.to_node.index, weight=0., length=0.)
+    elif mode == 'm-GCN':
+        for pipe in wds.pipes:
+            if (pipe.from_node.index in junc_list) and (pipe.to_node.index in junc_list):
+                G.add_edge(pipe.from_node.index, pipe.to_node.index, edge_attr=[pipe.diameter, pipe.length, 0])
+        for pump in wds.pumps:
+            if (pump.from_node.index in junc_list) and (pump.to_node.index in junc_list):
+                G.add_edge(pump.from_node.index, pump.to_node.index, edge_attr=[0, 0, 1])
+        for valve in wds.valves:
+            if (valve.from_node.index in junc_list) and (valve.to_node.index in junc_list):
+                G.add_edge(valve.from_node.index, valve.to_node.index, edge_attr=[0, 0, 1])
     return G
 
 
@@ -84,3 +96,17 @@ def get_sensitivity_matrix(wds, perturbance):
         wds.solve()
         S[i, :] = (wds.junctions.head - base_heads) / base_heads
     return S
+
+
+def seed_everything(seed):
+    r"""Sets the seed for generating random numbers in PyTorch, numpy and
+        Python.
+
+        Args:
+            seed (int): The desired seed.
+        """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
